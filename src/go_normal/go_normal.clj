@@ -15,9 +15,14 @@
 ;; Top Level
 (defclass nProcess)
 (defclass RealizableEntity)
-(defclass Activity)
+
 (defoproperty hasFunction
   :range RealizableEntity)
+
+(defoproperty realisedIn
+  :domain RealizableEntity
+  :range nProcess)
+
 
 
 
@@ -40,30 +45,27 @@
 
 (defmontfn subactivity
   [o activity-name comment
-   [super-activity super-process super-realizable]]
-  (let [realizable
+   [super-process super-realizable]]
+  (let [process
+        (p/p owl-class o
+             (str
+              (stem activity-name) "ing")
+             :super (var-get-maybe super-process)
+             :comment (str "The Process for: "
+                           comment))
+        realizable
         (p/p owl-class o
              (str
               "To" activity-name)
              :super (var-get-maybe super-realizable)
+             :equivalent
+             (owl-some realisedIn process)
              :comment (str "The RealizableEntity for: "
                            comment))]
       (p/pattern-annotator
        o
        (list
-        (p/p owl-class o
-             (str
-              (stem activity-name)
-              "ingActivity")
-             :super Activity
-             :equivalent
-             (owl-some hasFunction realizable))
-        (p/p owl-class o
-             (str
-              (stem activity-name) "ing")
-             :super (var-get-maybe super-process)
-             :comment (str "The Activity for: "
-                           comment))
+        process
         realizable))))
 
 (defmacro defsubactivity
@@ -76,8 +78,7 @@
 (defmontfn activity
   [o activity-name comment]
   (subactivity activity-name comment
-              [Activity nProcess RealizableEntity]))
-
+              [nProcess RealizableEntity]))
 
 (defmacro defactivity
   [activity-name comment]
@@ -156,6 +157,7 @@
 (apply
  as-disjoint
  (direct-subclasses RealizableEntity))
+
 ;; * Realizable Entities
 
 ;; This section represents the realisable entities. At the moment, I am choose
@@ -166,30 +168,13 @@
 
 ;; #+end_src
 
-(defoproperty realisedIn
-  :domain RealizableEntity
-  :range Activity)
-
-
-(defn fun-in [realizable process]
-  (owl-some
-   hasFunction
-   (owl-and
-    realizable
-    (owl-some
-     realisedIn process))))
-
-
-(defn on-substrate [chemical]
-  (owl-some hasSubstrate chemical))
-
-
 ;; * Catalytic Activity
 (defmacro defcatalyst [name substrate & rest]
   `(defclass ~name
-     :super (fun-in
-             ToCatalyse
-             (on-substrate ~substrate))
+     :super (owl-some
+             realisedIn
+             (owl-and Catalysing
+                      (owl-some hasSubstrate ~substrate)))
      ~@rest))
 
 (defcatalyst RecombinaseActivity
@@ -199,15 +184,13 @@
   between single-stranded DNA and double-stranded DNA.")
 
 
-(defn on-ligand [chemical]
-  (owl-some hasLigand chemical))
-
-
-(defmacro defbinding [name substrate]
+(defmacro defbinding [name ligand]
   `(defclass ~name
-     :super (fun-in
-             ToBind
-             (on-ligand ~substrate))))
+     :super
+     (owl-some
+      realisedIn
+      (owl-and Binding
+               (owl-some hasLigand ~ligand)))))
 
 (defbinding DNABindingActivity
   che/DNA)
